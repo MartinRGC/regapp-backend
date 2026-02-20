@@ -1,0 +1,12 @@
+{
+  "name": "regapp-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo '<h1>✅ RegApp Contacts - Frontend listo</h1>' > build/index.html && mkdir -p build/static"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
