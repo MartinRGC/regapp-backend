@@ -12,6 +12,14 @@
 	},
 	"compatibility_flags": [
 		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "regapp_db",
+			"database_name": "regapp-db",
+			"database_id": "b03a894b-196c-46d2-b275-2c93312d2897",
+			"remote": true
+		}
 	]
 	/**
 	 * Smart Placement
