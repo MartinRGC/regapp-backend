@@ -120,6 +120,41 @@ if (url.pathname === '/api/categories' && request.method === 'POST') {
   }
 }
 
+// Endpoint: GET /api/categories
+if (url.pathname === '/api/categories' && request.method === 'GET') {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+
+    // Obtener todas las categorías del usuario
+    const categories = await env.regapp_db.prepare(
+      'SELECT * FROM categories WHERE user_id = ? ORDER BY name ASC'
+    ).bind(userId).all();
+
+    return new Response(JSON.stringify({ success: true,  categories.results }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al obtener categorías:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
+
 
 
     // Ruta raíz
