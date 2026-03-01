@@ -100,13 +100,13 @@ if (url.pathname === '/api/categories' && request.method === 'POST') {
     const userId = 'temp-user-id'; // <-- Esto lo mejoraremos después
 
     // Insertar categoría en la base de datos
-    const stmt = env.DB.prepare(
+    const stmt = env.regapp_db.prepare(
       'INSERT INTO categories (name, user_id) VALUES (?, ?)'
     );
     const result = await stmt.bind(name.trim(), userId).run();
 
     // Obtener la categoría recién creada
-    const newCategory = await env.DB.prepare(
+    const newCategory = await env.regapp_db.prepare(
       'SELECT * FROM categories WHERE id = ?'
     ).bind(result.lastRowId).first();
 
