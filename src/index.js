@@ -149,6 +149,43 @@ export default {
         });
       }
     }
+    // Endpoint: GET /api/contacts
+    if (url.pathname === '/api/contacts' && request.method === 'GET') {
+      try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const userId = 'temp-user-id';
+
+        // Obtener todos los contactos del usuario con su categoría
+        const contacts = await env.regapp_db.prepare(`
+          SELECT c.*, cat.name as category_name
+          FROM contacts c
+          LEFT JOIN categories cat ON c.category_id = cat.id
+          WHERE c.user_id = ?
+          ORDER BY c.created_at DESC
+        `).bind(userId).all();
+
+        return new Response(JSON.stringify({ success: true, data: contacts.results }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      } catch (error) {
+        console.error('Error al obtener contactos:', error);
+        return new Response(JSON.stringify({ 
+          error: error.message,
+          stack: error.stack 
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+    }
 
     // Ruta raíz
     return new Response('RegApp Contacts API', { 
