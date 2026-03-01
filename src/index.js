@@ -115,12 +115,15 @@ if (url.pathname === '/api/categories' && request.method === 'POST') {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   } catch (error) {
-    console.error('Error al crear categoría:', error);
-    return new Response(JSON.stringify({ error: 'Error interno del servidor' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
+  console.error('Error al crear categoría:', error);
+  return new Response(JSON.stringify({ 
+    error: error.message, 
+    stack: error.stack 
+  }), {
+    status: 500,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders }
+  });
+}
 }
 
     // Ruta raíz
