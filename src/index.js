@@ -70,11 +70,9 @@ const corsHeaders = {
     // Endpoint: POST /api/categories
 if (url.pathname === '/api/categories' && request.method === 'POST') {
   try {
-    // Obtener datos del cuerpo de la solicitud
     const body = await request.json();
     const { name } = body;
 
-    // Validar que el nombre esté presente
     if (!name || name.trim() === '') {
       return new Response(JSON.stringify({ error: 'El nombre de la categoría es requerido' }), {
         status: 400,
@@ -82,7 +80,6 @@ if (url.pathname === '/api/categories' && request.method === 'POST') {
       });
     }
 
-    // Extraer user_id del header Authorization (Bearer token)
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
@@ -91,40 +88,39 @@ if (url.pathname === '/api/categories' && request.method === 'POST') {
       });
     }
 
-    // Obtener el token (sin el prefijo "Bearer ")
-    const token = authHeader.substring(7);
+    const userId = 'temp-user-id';
 
-    // Extraer user_id del token (por ahora usamos el email del token de Google)
-    // En producción, deberías decodificar el ID token de Google para obtener el email/sub
-    // Para simplificar ahora, usamos un user_id temporal
-    const userId = 'temp-user-id'; // <-- Esto lo mejoraremos después
-
-    // Insertar categoría en la base de datos
+    // Insertar categoría
     const stmt = env.regapp_db.prepare(
       'INSERT INTO categories (name, user_id) VALUES (?, ?)'
     );
     const result = await stmt.bind(name.trim(), userId).run();
 
-    // Obtener la categoría recién creada
+    // CORREGIDO: usar result.meta.last_row_id (sintaxis D1)
+    const lastRowId = result.meta.last_row_id;
+
+    // Obtener categoría recién creada
     const newCategory = await env.regapp_db.prepare(
       'SELECT * FROM categories WHERE id = ?'
-    ).bind(result.lastRowId).first();
+    ).bind(lastRowId).first();
 
     return new Response(JSON.stringify({ success: true, data: newCategory }), {
       status: 201,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   } catch (error) {
-  console.error('Error al crear categoría:', error);
-  return new Response(JSON.stringify({ 
-    error: error.message, 
-    stack: error.stack 
-  }), {
-    status: 500,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-  });
+    console.error('Error al crear categoría:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
 }
-}
+
+
 
     // Ruta raíz
     return new Response('RegApp Contacts API', { 
