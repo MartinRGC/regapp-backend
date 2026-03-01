@@ -2,12 +2,12 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // CORS headers para todas las respuestas
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://regapp-frontend.pages.dev',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+    // CORS headers corregidos (SIN ESPACIOS AL FINAL)
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': 'https://regapp-frontend.pages.dev',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
 
     // Manejar preflight OPTIONS
     if (request.method === 'OPTIONS') {
@@ -21,7 +21,7 @@ const corsHeaders = {
       });
     }
 
-    // OAuth callback: ahora acepta POST con JSON { code: "..." }
+    // OAuth callback
     if (url.pathname === '/auth/callback' && request.method === 'POST') {
       try {
         const { code } = await request.json();
@@ -32,7 +32,7 @@ const corsHeaders = {
           });
         }
 
-        // Intercambiar code por token (¡sin espacios en la URL!)
+        // URL corregida (SIN ESPACIOS)
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -40,7 +40,7 @@ const corsHeaders = {
             code,
             client_id: env.GOOGLE_CLIENT_ID,
             client_secret: env.GOOGLE_CLIENT_SECRET,
-            redirect_uri: 'https://regapp-frontend.pages.dev', // ✅ Corregido
+            redirect_uri: 'https://regapp-frontend.pages.dev', // Corregido
             grant_type: 'authorization_code'
           })
         });
@@ -67,95 +67,88 @@ const corsHeaders = {
         });
       }
     }
+
     // Endpoint: POST /api/categories
-if (url.pathname === '/api/categories' && request.method === 'POST') {
-  try {
-    const body = await request.json();
-    const { name } = body;
+    if (url.pathname === '/api/categories' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        const { name } = body;
 
-    if (!name || name.trim() === '') {
-      return new Response(JSON.stringify({ error: 'El nombre de la categoría es requerido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+        if (!name || name.trim() === '') {
+          return new Response(JSON.stringify({ error: 'El nombre de la categoría es requerido' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const userId = 'temp-user-id';
+
+        const stmt = env.regapp_db.prepare(
+          'INSERT INTO categories (name, user_id) VALUES (?, ?)'
+        );
+        const result = await stmt.bind(name.trim(), userId).run();
+        const lastRowId = result.meta.last_row_id;
+
+        const newCategory = await env.regapp_db.prepare(
+          'SELECT * FROM categories WHERE id = ?'
+        ).bind(lastRowId).first();
+
+        return new Response(JSON.stringify({ success: true, data: newCategory }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      } catch (error) {
+        console.error('Error al crear categoría:', error);
+        return new Response(JSON.stringify({ 
+          error: error.message,
+          stack: error.stack 
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
     }
 
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    // Endpoint: GET /api/categories (AGREGADO)
+    if (url.pathname === '/api/categories' && request.method === 'GET') {
+      try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const userId = 'temp-user-id';
+
+        const categories = await env.regapp_db.prepare(
+          'SELECT * FROM categories WHERE user_id = ? ORDER BY name ASC'
+        ).bind(userId).all();
+
+        return new Response(JSON.stringify({ success: true, data: categories.results }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      } catch (error) {
+        console.error('Error al obtener categorías:', error);
+        return new Response(JSON.stringify({ 
+          error: error.message,
+          stack: error.stack 
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
     }
-
-    const userId = 'temp-user-id';
-
-    // Insertar categoría
-    const stmt = env.regapp_db.prepare(
-      'INSERT INTO categories (name, user_id) VALUES (?, ?)'
-    );
-    const result = await stmt.bind(name.trim(), userId).run();
-
-    // CORREGIDO: usar result.meta.last_row_id (sintaxis D1)
-    const lastRowId = result.meta.last_row_id;
-
-    // Obtener categoría recién creada
-    const newCategory = await env.regapp_db.prepare(
-      'SELECT * FROM categories WHERE id = ?'
-    ).bind(lastRowId).first();
-
-    return new Response(JSON.stringify({ success: true, data: newCategory }), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  } catch (error) {
-    console.error('Error al crear categoría:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-}
-
-// Endpoint: GET /api/categories
-if (url.pathname === '/api/categories' && request.method === 'GET') {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-    }
-
-    const userId = 'temp-user-id';
-
-    // Obtener todas las categorías del usuario
-    const categories = await env.regapp_db.prepare(
-      'SELECT * FROM categories WHERE user_id = ? ORDER BY name ASC'
-    ).bind(userId).all();
-
-    return new Response(JSON.stringify({ success: true,  categories.results }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  } catch (error) {
-    console.error('Error al obtener categorías:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-}
-
-
-
 
     // Ruta raíz
     return new Response('RegApp Contacts API', { 
