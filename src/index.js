@@ -3,11 +3,11 @@ export default {
     const url = new URL(request.url);
 
     // CORS headers para todas las respuestas
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': 'https://regapp-frontend.pages.dev',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': 'https://regapp-frontend.pages.dev',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
     // Manejar preflight OPTIONS
     if (request.method === 'OPTIONS') {
