@@ -327,7 +327,7 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
       }
     }
 
-    // Actualizar contacto
+    // Actualizar contacto (SIN updated_at)
     const stmt = env.regapp_db.prepare(`
       UPDATE contacts
       SET 
@@ -335,8 +335,7 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
         name = ?,
         email = COALESCE(?, email),
         phone = COALESCE(?, phone),
-        notes = COALESCE(?, notes),
-        updated_at = CURRENT_TIMESTAMP
+        notes = COALESCE(?, notes)
       WHERE id = ? AND user_id = ?
     `);
     await stmt.bind(
@@ -372,6 +371,7 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
     });
   }
 }
+
 
 
     // Ruta raíz
