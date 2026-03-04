@@ -269,6 +269,109 @@ if (url.pathname === '/api/contacts' && request.method === 'POST') {
   }
 }
 
+// Endpoint: PUT /api/contacts/:id
+if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
+  try {
+    // Extraer ID del path
+    const id = url.pathname.split('/')[3];
+    if (!id || isNaN(parseInt(id))) {
+      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const body = await request.json();
+    const { category_id, name, email, phone, notes } = body;
+
+    if (!name || name.trim() === '') {
+      return new Response(JSON.stringify({ error: 'El nombre del contacto es requerido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+
+    // Verificar que el contacto existe y pertenece al usuario
+    const existingContact = await env.regapp_db.prepare(
+      'SELECT id FROM contacts WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).first();
+
+    if (!existingContact) {
+      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Si se proporciona category_id, verificar que exista
+    if (category_id) {
+      const categoryCheck = await env.regapp_db.prepare(
+        'SELECT id FROM categories WHERE id = ? AND user_id = ?'
+      ).bind(category_id, userId).first();
+
+      if (!categoryCheck) {
+        return new Response(JSON.stringify({ error: 'Categoría no encontrada' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+    }
+
+    // Actualizar contacto
+    const stmt = env.regapp_db.prepare(`
+      UPDATE contacts
+      SET 
+        category_id = COALESCE(?, category_id),
+        name = ?,
+        email = COALESCE(?, email),
+        phone = COALESCE(?, phone),
+        notes = COALESCE(?, notes),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `);
+    await stmt.bind(
+      category_id || null,
+      name.trim(),
+      email?.trim() || null,
+      phone?.trim() || null,
+      notes?.trim() || null,
+      id,
+      userId
+    ).run();
+
+    // Obtener contacto actualizado
+    const updatedContact = await env.regapp_db.prepare(`
+      SELECT c.*, cat.name as category_name
+      FROM contacts c
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      WHERE c.id = ?
+    `).bind(id).first();
+
+    return new Response(JSON.stringify({ success: true,  updatedContact }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al actualizar contacto:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
 
 
     // Ruta raíz
