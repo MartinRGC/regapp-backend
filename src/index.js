@@ -372,6 +372,61 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
   }
 }
 
+// Endpoint: DELETE /api/contacts/:id
+if (url.pathname.startsWith('/api/contacts/') && request.method === 'DELETE') {
+  try {
+    // Extraer ID del path
+    const id = url.pathname.split('/')[3];
+    if (!id || isNaN(parseInt(id))) {
+      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+
+    // Verificar que el contacto existe y pertenece al usuario
+    const existingContact = await env.regapp_db.prepare(
+      'SELECT id FROM contacts WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).first();
+
+    if (!existingContact) {
+      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Eliminar contacto
+    await env.regapp_db.prepare(
+      'DELETE FROM contacts WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).run();
+
+    return new Response(JSON.stringify({ success: true, message: 'Contacto eliminado correctamente' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al eliminar contacto:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
 
 
     // Ruta raíz
