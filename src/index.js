@@ -479,6 +479,91 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'GET') {
   }
 }
 
+// Endpoint: PUT /api/categories/:id
+if (url.pathname.startsWith('/api/categories/') && request.method === 'PUT') {
+  try {
+    // Extraer ID del path
+    const id = url.pathname.split('/')[3];
+    if (!id || isNaN(parseInt(id))) {
+      return new Response(JSON.stringify({ error: 'ID de categoría inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const body = await request.json();
+    const { name } = body;
+
+    if (!name || name.trim() === '') {
+      return new Response(JSON.stringify({ error: 'El nombre de la categoría es requerido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+    const newName = name.trim();
+
+    // Verificar que la categoría existe y pertenece al usuario
+    const currentCategory = await env.regapp_db.prepare(
+      'SELECT name FROM categories WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).first();
+
+    if (!currentCategory) {
+      return new Response(JSON.stringify({ error: 'Categoría no encontrada' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Si el nuevo nombre es diferente, verificar que no exista otra categoría con ese nombre
+    if (newName !== currentCategory.name) {
+      const duplicateCheck = await env.regapp_db.prepare(
+        'SELECT id FROM categories WHERE name = ? AND user_id = ? AND id != ?'
+      ).bind(newName, userId, id).first();
+
+      if (duplicateCheck) {
+        return new Response(JSON.stringify({ error: 'Ya existe una categoría con ese nombre' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+    }
+
+    // Actualizar categoría
+    await env.regapp_db.prepare(
+      'UPDATE categories SET name = ? WHERE id = ? AND user_id = ?'
+    ).bind(newName, id, userId).run();
+
+    // Obtener categoría actualizada
+    const updatedCategory = await env.regapp_db.prepare(
+      'SELECT * FROM categories WHERE id = ?'
+    ).bind(id).first();
+
+    return new Response(JSON.stringify({ success: true,  updatedCategory }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al actualizar categoría:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
 
 
     // Ruta raíz
