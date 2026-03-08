@@ -426,6 +426,58 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'DELETE') {
     });
   }
 }
+// Endpoint: GET /api/contacts/:id
+if (url.pathname.startsWith('/api/contacts/') && request.method === 'GET') {
+  try {
+    // Extraer ID del path
+    const id = url.pathname.split('/')[3];
+    if (!id || isNaN(parseInt(id))) {
+      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+
+    // Obtener contacto con su categoría
+    const contact = await env.regapp_db.prepare(`
+      SELECT c.*, cat.name as category_name
+      FROM contacts c
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      WHERE c.id = ? AND c.user_id = ?
+    `).bind(id, userId).first();
+
+    if (!contact) {
+      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true,  contact }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al obtener contacto:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
 
 
 
