@@ -564,7 +564,78 @@ if (url.pathname.startsWith('/api/categories/') && request.method === 'PUT') {
   }
 }
 
+// Endpoint: DELETE /api/categories/:id
+if (url.pathname.startsWith('/api/categories/') && request.method === 'DELETE') {
+  try {
+    // Extraer ID del path
+    const id = url.pathname.split('/')[3];
+    if (!id || isNaN(parseInt(id))) {
+      return new Response(JSON.stringify({ error: 'ID de categoría inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
 
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+
+    // Verificar que la categoría existe y pertenece al usuario
+    const existingCategory = await env.regapp_db.prepare(
+      'SELECT id, name FROM categories WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).first();
+
+    if (!existingCategory) {
+      return new Response(JSON.stringify({ error: 'Categoría no encontrada' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Verificar si la categoría tiene contactos asociados
+    const contactCount = await env.regapp_db.prepare(
+      'SELECT COUNT(*) as count FROM contacts WHERE category_id = ? AND user_id = ?'
+    ).bind(id, userId).first();
+
+    if (contactCount.count > 0) {
+      return new Response(JSON.stringify({ 
+        error: 'No se puede eliminar la categoría porque tiene contactos asociados',
+        contact_count: contactCount.count
+      }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Eliminar categoría
+    await env.regapp_db.prepare(
+      'DELETE FROM categories WHERE id = ? AND user_id = ?'
+    ).bind(id, userId).run();
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `Categoría "${existingCategory.name}" eliminada correctamente` 
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al eliminar categoría:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
 
     // Ruta raíz
     return new Response('RegApp Contacts API', { 
