@@ -149,43 +149,109 @@ export default {
         });
       }
     }
+    
     // Endpoint: GET /api/contacts
-    if (url.pathname === '/api/contacts' && request.method === 'GET') {
-      try {
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
-
-        const userId = 'temp-user-id';
-
-        // Obtener todos los contactos del usuario con su categoría
-        const contacts = await env.regapp_db.prepare(`
-          SELECT c.*, cat.name as category_name
-          FROM contacts c
-          LEFT JOIN categories cat ON c.category_id = cat.id
-          WHERE c.user_id = ?
-          ORDER BY c.created_at DESC
-        `).bind(userId).all();
-
-        return new Response(JSON.stringify({ success: true, data: contacts.results }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      } catch (error) {
-        console.error('Error al obtener contactos:', error);
-        return new Response(JSON.stringify({ 
-          error: error.message,
-          stack: error.stack 
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      }
+if (url.pathname === '/api/contacts' && request.method === 'GET') {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
+
+    const userId = 'temp-user-id';
+
+    // Obtener parámetros de búsqueda y filtros
+    const search = url.searchParams.get('search'); // Buscar en name, email, phone
+    const categoryId = url.searchParams.get('category_id'); // Filtrar por categoría
+    const limit = parseInt(url.searchParams.get('limit')) || 100; // Límite de resultados
+    const offset = parseInt(url.searchParams.get('offset')) || 0; // Desplazamiento (paginación)
+
+    // Construir consulta dinámicamente
+    let query = `
+      SELECT c.*, cat.name as category_name
+      FROM contacts c
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      WHERE c.user_id = ?
+    `;
+    let params = [userId];
+
+    // Aplicar filtro de búsqueda
+    if (search) {
+      query += ` AND (
+        c.name LIKE ? OR
+        c.email LIKE ? OR
+        c.phone LIKE ?
+      )`;
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    // Aplicar filtro por categoría
+    if (categoryId && !isNaN(parseInt(categoryId))) {
+      query += ` AND c.category_id = ?`;
+      params.push(parseInt(categoryId));
+    }
+
+    // Ordenar y limitar resultados
+    query += ` ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    // Ejecutar consulta
+    const contacts = await env.regapp_db.prepare(query).bind(...params).all();
+
+    // Contar total de resultados (sin límite)
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM contacts c
+      WHERE c.user_id = ?
+    `;
+    let countParams = [userId];
+
+    if (search) {
+      countQuery += ` AND (
+        c.name LIKE ? OR
+        c.email LIKE ? OR
+        c.phone LIKE ?
+      )`;
+      const searchPattern = `%${search}%`;
+      countParams.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (categoryId && !isNaN(parseInt(categoryId))) {
+      countQuery += ` AND c.category_id = ?`;
+      countParams.push(parseInt(categoryId));
+    }
+
+    const countResult = await env.regapp_db.prepare(countQuery).bind(...countParams).first();
+    const total = countResult.total;
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      data: contacts.results,
+      pagination: {
+        total,
+        limit,
+        offset,
+        has_more: offset + contacts.results.length < total
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al obtener contactos:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
 
     // Endpoint: POST /api/contacts
 if (url.pathname === '/api/contacts' && request.method === 'POST') {
@@ -636,6 +702,7 @@ if (url.pathname.startsWith('/api/categories/') && request.method === 'DELETE') 
     });
   }
 }
+
 
     // Ruta raíz
     return new Response('RegApp Contacts API', { 
