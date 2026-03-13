@@ -149,9 +149,80 @@ export default {
         });
       }
     }
+
+    // GET /api/contacts/:id - Obtener un contacto específico
+    if (url.pathname.startsWith('/api/contacts/') && request.method === 'GET') {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+    const id = url.pathname.split('/')[3];
     
+    // Validar que el ID sea un número
+    if (!id || isNaN(id)) {
+      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Obtener contacto
+    const contact = await env.regapp_db.prepare(`
+      SELECT * FROM contacts 
+      WHERE id = ? AND user_id = ?
+    `).bind(id, userId).first();
+
+    // Verificar si existe
+    if (!contact) {
+      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // Parsear extra_data
+    let parsedExtraData = {};
+    try {
+      parsedExtraData = contact.extra_data ? JSON.parse(contact.extra_data) : {};
+    } catch (e) {
+      parsedExtraData = {};
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      data: {
+        id: contact.id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        category_id: contact.category_id,
+        extra_data: parsedExtraData,
+        created_at: contact.created_at,
+        updated_at: contact.updated_at
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    console.error('Error al obtener contacto:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Error al obtener contacto',
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+    }
     // Endpoint: GET /api/contacts
-if (url.pathname === '/api/contacts' && request.method === 'GET') {
+    if (url.pathname === '/api/contacts' && request.method === 'GET') {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -251,17 +322,29 @@ if (url.pathname === '/api/contacts' && request.method === 'GET') {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   }
-}
+    }
 
 // POST /api/contacts - Crear contacto
-if (request.method === 'POST' && pathname === '/api/contacts') {
+    if (url.pathname === '/api/contacts' && request.method === 'POST') {
   try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
     const body = await request.json();
     const { name, email, phone, category_id, extra_data } = body;
 
     // Validación básica
     if (!name || !category_id) {
-      return error(400, 'Faltan campos requeridos (name, category_id)');
+      return new Response(JSON.stringify({ error: 'Faltan campos requeridos (name, category_id)' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
 
     // Validar que extra_data sea un objeto (o undefined)
@@ -283,29 +366,68 @@ if (request.method === 'POST' && pathname === '/api/contacts') {
       extraDataJson
     ).run();
 
-    return success({
-      id: result.lastRowId,
-      name,
-      email,
-      phone,
-      category_id,
-      extra_data: extra_data || {},
-      created_at: new Date().toISOString()
+    // Obtener el contacto recién creado
+    const newContact = await env.regapp_db.prepare(`
+      SELECT * FROM contacts WHERE id = ?
+    `).bind(result.meta.last_row_id).first();
+
+    // Parsear extra_data para la respuesta
+    let parsedExtraData = {};
+    try {
+      parsedExtraData = newContact.extra_data ? JSON.parse(newContact.extra_data) : {};
+    } catch (e) {
+      parsedExtraData = {};
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      data: {
+        id: newContact.id,
+        name: newContact.name,
+        email: newContact.email,
+        phone: newContact.phone,
+        category_id: newContact.category_id,
+        extra_data: parsedExtraData,
+        created_at: newContact.created_at,
+        updated_at: newContact.updated_at
+      }
+    }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   } catch (error) {
     console.error('Error al crear contacto:', error);
-    return error(500, 'Error al crear contacto');
+    return new Response(JSON.stringify({ 
+      error: 'Error al crear contacto',
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
   }
-}
+    }
+
 
 // PUT /api/contacts/:id - Actualizar contacto
-if (request.method === 'PUT' && pathname.startsWith('/api/contacts/')) {
+    if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
   try {
-    const id = pathname.split('/')[3];
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const userId = 'temp-user-id';
+    const id = url.pathname.split('/')[3];
     
     // Validar que el ID sea un número
     if (!id || isNaN(id)) {
-      return error(400, 'ID de contacto inválido');
+      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
 
     const body = await request.json();
@@ -313,7 +435,10 @@ if (request.method === 'PUT' && pathname.startsWith('/api/contacts/')) {
 
     // Validación básica
     if (!name && !email && !phone && !category_id && !extra_data) {
-      return error(400, 'No hay datos para actualizar');
+      return new Response(JSON.stringify({ error: 'No hay datos para actualizar' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
 
     // Construir la consulta dinámicamente
@@ -353,7 +478,10 @@ if (request.method === 'PUT' && pathname.startsWith('/api/contacts/')) {
 
     // Verificar si se actualizó algún registro
     if (result.changes === 0) {
-      return error(404, 'Contacto no encontrado o no autorizado');
+      return new Response(JSON.stringify({ error: 'Contacto no encontrado o no autorizado' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
 
     // Obtener el contacto actualizado
@@ -361,24 +489,44 @@ if (request.method === 'PUT' && pathname.startsWith('/api/contacts/')) {
       SELECT * FROM contacts WHERE id = ? AND user_id = ?
     `).bind(id, userId).first();
 
-    return success({
-      id: updatedContact.id,
-      name: updatedContact.name,
-      email: updatedContact.email,
-      phone: updatedContact.phone,
-      category_id: updatedContact.category_id,
-      extra_data: updatedContact.extra_data ? JSON.parse(updatedContact.extra_data) : {},
-      created_at: updatedContact.created_at,
-      updated_at: updatedContact.updated_at
+    // Parsear extra_data
+    let parsedExtraData = {};
+    try {
+      parsedExtraData = updatedContact.extra_data ? JSON.parse(updatedContact.extra_data) : {};
+    } catch (e) {
+      parsedExtraData = {};
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      data: {
+        id: updatedContact.id,
+        name: updatedContact.name,
+        email: updatedContact.email,
+        phone: updatedContact.phone,
+        category_id: updatedContact.category_id,
+        extra_data: parsedExtraData,
+        created_at: updatedContact.created_at,
+        updated_at: updatedContact.updated_at
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   } catch (error) {
     console.error('Error al actualizar contacto:', error);
-    return error(500, 'Error al actualizar contacto');
+    return new Response(JSON.stringify({ 
+      error: 'Error al actualizar contacto',
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
   }
-}
+    }
 
 // Endpoint: DELETE /api/contacts/:id
-if (url.pathname.startsWith('/api/contacts/') && request.method === 'DELETE') {
+    if (url.pathname.startsWith('/api/contacts/') && request.method === 'DELETE') {
   try {
     // Extraer ID del path
     const id = url.pathname.split('/')[3];
@@ -430,62 +578,11 @@ if (url.pathname.startsWith('/api/contacts/') && request.method === 'DELETE') {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   }
-}
-// Endpoint: GET /api/contacts/:id
-if (url.pathname.startsWith('/api/contacts/') && request.method === 'GET') {
-  try {
-    // Extraer ID del path
-    const id = url.pathname.split('/')[3];
-    if (!id || isNaN(parseInt(id))) {
-      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
     }
 
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-    }
-
-    const userId = 'temp-user-id';
-
-    // Obtener contacto con su categoría
-    const contact = await env.regapp_db.prepare(`
-      SELECT c.*, cat.name as category_name
-      FROM contacts c
-      LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE c.id = ? AND c.user_id = ?
-    `).bind(id, userId).first();
-
-    if (!contact) {
-      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-    }
-
-    return new Response(JSON.stringify({ success: true,  contact }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  } catch (error) {
-    console.error('Error al obtener contacto:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-}
 
 // Endpoint: PUT /api/categories/:id
-if (url.pathname.startsWith('/api/categories/') && request.method === 'PUT') {
+    if (url.pathname.startsWith('/api/categories/') && request.method === 'PUT') {
   try {
     // Extraer ID del path
     const id = url.pathname.split('/')[3];
@@ -567,10 +664,10 @@ if (url.pathname.startsWith('/api/categories/') && request.method === 'PUT') {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   }
-}
+    }
 
 // Endpoint: DELETE /api/categories/:id
-if (url.pathname.startsWith('/api/categories/') && request.method === 'DELETE') {
+    if (url.pathname.startsWith('/api/categories/') && request.method === 'DELETE') {
   try {
     // Extraer ID del path
     const id = url.pathname.split('/')[3];
@@ -640,7 +737,7 @@ if (url.pathname.startsWith('/api/categories/') && request.method === 'DELETE') 
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   }
-}
+  }
 
 
     // Ruta raíz
