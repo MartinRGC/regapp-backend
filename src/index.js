@@ -253,85 +253,48 @@ if (url.pathname === '/api/contacts' && request.method === 'GET') {
   }
 }
 
-    // Endpoint: POST /api/contacts
-if (url.pathname === '/api/contacts' && request.method === 'POST') {
+// POST /api/contacts - Crear contacto
+if (request.method === 'POST' && pathname === '/api/contacts') {
   try {
     const body = await request.json();
-    const { category_id, name, email, phone, notes } = body;
+    const { name, email, phone, category_id, extra_data } = body;
 
-    if (!name || name.trim() === '') {
-      return new Response(JSON.stringify({ error: 'El nombre del contacto es requerido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    // Validación básica
+    if (!name || !category_id) {
+      return error(400, 'Faltan campos requeridos (name, category_id)');
     }
 
-    if (!category_id) {
-      return new Response(JSON.stringify({ error: 'La categoría es requerida' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-    }
-
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-    }
-
-    const userId = 'temp-user-id';
-
-    // Verificar que la categoría existe
-    const categoryCheck = await env.regapp_db.prepare(
-      'SELECT id FROM categories WHERE id = ? AND user_id = ?'
-    ).bind(category_id, userId).first();
-
-    if (!categoryCheck) {
-      return new Response(JSON.stringify({ error: 'Categoría no encontrada' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    // Validar que extra_data sea un objeto (o undefined)
+    let extraDataJson = '{}';
+    if (extra_data && typeof extra_data === 'object') {
+      extraDataJson = JSON.stringify(extra_data);
     }
 
     // Insertar contacto
-    const stmt = env.regapp_db.prepare(`
-      INSERT INTO contacts (category_id, name, email, phone, notes, user_id)
+    const result = await env.regapp_db.prepare(`
+      INSERT INTO contacts (name, email, phone, category_id, user_id, extra_data)
       VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const result = await stmt.bind(
+    `).bind(
+      name,
+      email || null,
+      phone || null,
       category_id,
-      name.trim(),
-      email?.trim() || null,
-      phone?.trim() || null,
-      notes?.trim() || null,
-      userId
+      userId,
+      extraDataJson
     ).run();
 
-    const lastRowId = result.meta.last_row_id;
-
-    // Obtener contacto recién creado
-    const newContact = await env.regapp_db.prepare(`
-      SELECT c.*, cat.name as category_name
-      FROM contacts c
-      LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE c.id = ?
-    `).bind(lastRowId).first();
-
-    return new Response(JSON.stringify({ success: true,  newContact }), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    return success({
+      id: result.lastRowId,
+      name,
+      email,
+      phone,
+      category_id,
+      extra_data: extra_data || {},
+      created_at: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error al crear contacto:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
+    return error(500, 'Error al crear contacto');
   }
 }
 
