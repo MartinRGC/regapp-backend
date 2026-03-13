@@ -298,106 +298,82 @@ if (request.method === 'POST' && pathname === '/api/contacts') {
   }
 }
 
-// Endpoint: PUT /api/contacts/:id
-if (url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
+// PUT /api/contacts/:id - Actualizar contacto
+if (request.method === 'PUT' && pathname.startsWith('/api/contacts/')) {
   try {
-    // Extraer ID del path
-    const id = url.pathname.split('/')[3];
-    if (!id || isNaN(parseInt(id))) {
-      return new Response(JSON.stringify({ error: 'ID de contacto inválido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    const id = pathname.split('/')[3];
+    
+    // Validar que el ID sea un número
+    if (!id || isNaN(id)) {
+      return error(400, 'ID de contacto inválido');
     }
 
     const body = await request.json();
-    const { category_id, name, email, phone, notes } = body;
+    const { name, email, phone, category_id, extra_data } = body;
 
-    if (!name || name.trim() === '') {
-      return new Response(JSON.stringify({ error: 'El nombre del contacto es requerido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    // Validación básica
+    if (!name && !email && !phone && !category_id && !extra_data) {
+      return error(400, 'No hay datos para actualizar');
     }
 
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticación requerido' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    // Construir la consulta dinámicamente
+    const updates = [];
+    const values = [];
+    
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name);
     }
-
-    const userId = 'temp-user-id';
-
-    // Verificar que el contacto existe y pertenece al usuario
-    const existingContact = await env.regapp_db.prepare(
-      'SELECT id FROM contacts WHERE id = ? AND user_id = ?'
-    ).bind(id, userId).first();
-
-    if (!existingContact) {
-      return new Response(JSON.stringify({ error: 'Contacto no encontrado' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+    if (email !== undefined) {
+      updates.push('email = ?');
+      values.push(email);
     }
-
-    // Si se proporciona category_id, verificar que exista
-    if (category_id) {
-      const categoryCheck = await env.regapp_db.prepare(
-        'SELECT id FROM categories WHERE id = ? AND user_id = ?'
-      ).bind(category_id, userId).first();
-
-      if (!categoryCheck) {
-        return new Response(JSON.stringify({ error: 'Categoría no encontrada' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      values.push(phone);
     }
+    if (category_id !== undefined) {
+      updates.push('category_id = ?');
+      values.push(category_id);
+    }
+    if (extra_data !== undefined && typeof extra_data === 'object') {
+      updates.push('extra_data = ?');
+      values.push(JSON.stringify(extra_data));
+    }
+    
+    // Agregar user_id y id al final
+    values.push(userId, id);
 
-    // Actualizar contacto (SIN updated_at)
-    const stmt = env.regapp_db.prepare(`
-      UPDATE contacts
-      SET 
-        category_id = COALESCE(?, category_id),
-        name = ?,
-        email = COALESCE(?, email),
-        phone = COALESCE(?, phone),
-        notes = COALESCE(?, notes)
+    // Ejecutar actualización
+    const result = await env.regapp_db.prepare(`
+      UPDATE contacts 
+      SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
-    `);
-    await stmt.bind(
-      category_id || null,
-      name.trim(),
-      email?.trim() || null,
-      phone?.trim() || null,
-      notes?.trim() || null,
-      id,
-      userId
-    ).run();
+    `).bind(...values).run();
 
-    // Obtener contacto actualizado
+    // Verificar si se actualizó algún registro
+    if (result.changes === 0) {
+      return error(404, 'Contacto no encontrado o no autorizado');
+    }
+
+    // Obtener el contacto actualizado
     const updatedContact = await env.regapp_db.prepare(`
-      SELECT c.*, cat.name as category_name
-      FROM contacts c
-      LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE c.id = ?
-    `).bind(id).first();
+      SELECT * FROM contacts WHERE id = ? AND user_id = ?
+    `).bind(id, userId).first();
 
-    return new Response(JSON.stringify({ success: true,  updatedContact }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    return success({
+      id: updatedContact.id,
+      name: updatedContact.name,
+      email: updatedContact.email,
+      phone: updatedContact.phone,
+      category_id: updatedContact.category_id,
+      extra_data: updatedContact.extra_data ? JSON.parse(updatedContact.extra_data) : {},
+      created_at: updatedContact.created_at,
+      updated_at: updatedContact.updated_at
     });
   } catch (error) {
     console.error('Error al actualizar contacto:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
+    return error(500, 'Error al actualizar contacto');
   }
 }
 
